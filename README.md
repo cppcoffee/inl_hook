@@ -1,6 +1,6 @@
 ### abort inl_hook
 
-**inl_hook** is a linux kernel function hooking library. It simple easy to use.
+**inl_hook** is a linux kernel function inline hooking library. It simple easy to use.
 
 ### example
 
