@@ -16,7 +16,6 @@ KDIR := ~/linux-3.10.0-514.26.2.el7
 PWD  := $(shell pwd)
 
 EXTRA_CFLAGS += -I$(shell pwd)/udis86/
-EXTRA_CFLAGS += -D__KERNEL__
 EXTRA_CFLAGS += -O -g 
 
 modules:
