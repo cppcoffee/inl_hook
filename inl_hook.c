@@ -204,8 +204,8 @@ static u8 *post_hook(struct hook_item *item, void *target,
 	item->hook_func = hook;
 	item->stolen = stolen;
 
-	memcpy(item->orig_inst, target, stolen);
-	memcpy(item->trampoline, target, stolen);
+	memmove(item->orig_inst, target, stolen);
+	memmove(item->trampoline, target, stolen);
 
 	emit_jump(item->trampoline + stolen, target + stolen);
 
@@ -224,7 +224,7 @@ static void hook_restore(struct hook_item *item)
 	unsigned long o_cr0;
 
 	o_cr0 = disable_wp();
-	memcpy(item->orig_func, item->orig_inst, item->stolen);
+	memmove(item->orig_func, item->orig_inst, item->stolen);
 	restore_wp(o_cr0);
 
 	list_del(&item->list);
