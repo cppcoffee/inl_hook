@@ -124,13 +124,16 @@ static u8 *emit_jump(u8 *pcode, u8 *jumpto)
 #if defined(CONFIG_X86_32)
 		// on x86 we write an absolute address (just behind the instruction)
 		*((u32 *)pcode) = (u32)(pcode + sizeof(u32));
+		pcode += sizeof(u32);
+		*((u32 *)pcode) = (u32)jumpto;
+		pcode += sizeof(u32);
 #elif defined(CONFIG_X86_64)
 		// on x64 we write the relative address of the same location
 		*((u32 *)pcode) = (u32)0;
-#endif
 		pcode += sizeof(u32);
 		*((u64 *)pcode) = (u64)jumpto;
 		pcode += sizeof(u64);
+#endif
 	}
 #else
 #error unsupported platform
