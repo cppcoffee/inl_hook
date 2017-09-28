@@ -244,7 +244,6 @@ int inl_sethook(void **orig, void *hook)
 	void *target = *orig;
 
 	target = skip_jumps(target);
-	hook = skip_jumps(hook);
 
 	pr_debug("Started on the job: %p / %p\n", target, hook);
 
