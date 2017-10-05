@@ -3,6 +3,7 @@
 
 int inl_sethook(void **orig, void *hook);
 int inl_unhook(void *hook);
+int inl_within_trampoline(unsigned long address);
 
 #endif
 

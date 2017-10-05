@@ -237,6 +237,26 @@ static void hook_restore(struct hook_item *item)
 }
 
 
+int inl_within_trampoline(unsigned long address)
+{
+	long bytes;
+	struct hook_item *item;
+	unsigned long start, end;
+
+	list_for_each_entry(item, &hook_list, list) {
+		bytes = item->stolen + HOOK_MAX_CODE_BYTES;
+		start = (unsigned long)item->trampoline;
+		end = (unsigned long)item->trampoline + bytes;
+
+		if (address >= start && address < end) {
+			return -EBUSY;
+		}
+	}
+
+	return 0;
+}
+
+
 int inl_sethook(void **orig, void *hook)
 {
 	u32 instr_len;
