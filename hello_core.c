@@ -14,11 +14,11 @@
 #include "inl_hook.h"
 
 
-typedef int (*_TCP_V4_DO_RCV)(struct sock *sk, struct sk_buff *skb);
+/* variable */
+static int (*true_tcp_v4_do_rcv)(struct sock *sk, struct sk_buff *skb);
 
-_TCP_V4_DO_RCV true_tcp_v4_do_rcv;
 
-
+/* hook function */
 static int my_tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	pr_info("sk=%p\n", sk);
@@ -28,7 +28,7 @@ static int my_tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 static int init_find_ksymbol(void)
 {
-	true_tcp_v4_do_rcv = (_TCP_V4_DO_RCV) kallsyms_lookup_name("tcp_v4_do_rcv");
+	true_tcp_v4_do_rcv = (void *) kallsyms_lookup_name("tcp_v4_do_rcv");
 	if (true_tcp_v4_do_rcv == NULL) {
 		pr_err("not find tcp_v4_do_rcv.\n");
 		return -1;
