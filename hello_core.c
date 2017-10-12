@@ -32,22 +32,70 @@ struct stack_trace trace = {
 
 
 /* variable */
-static int (*true_tcp_v4_do_rcv)(struct sock *sk, struct sk_buff *skb);
+static void (*tcp_set_state_fn)(struct sock *sk, int state);
 
 
 /* hook function */
-static int my_tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
+static void
+my_tcp_set_state(struct sock *sk, int state)
 {
-	pr_info("sk=%p\n", sk);
-	return true_tcp_v4_do_rcv(sk, skb);
+	/////////////////////////////////////////////////////////
+	// add patch code.
+	static const char *my_state_name[]={
+		"Unused","Established","Syn Sent","Syn Recv",
+		"Fin Wait 1","Fin Wait 2","Time Wait", "Close",
+		"Close Wait","Last ACK","Listen","Closing"
+	};
+	struct inet_sock *inet = inet_sk(sk);
+	/////////////////////////////////////////////////////////
+
+	int oldstate = sk->sk_state;
+
+	switch (state) {
+	case TCP_ESTABLISHED:
+		if (oldstate != TCP_ESTABLISHED)
+			TCP_INC_STATS(sock_net(sk), TCP_MIB_CURRESTAB);
+		break;
+
+	case TCP_CLOSE:
+		if (oldstate == TCP_CLOSE_WAIT || oldstate == TCP_ESTABLISHED)
+			TCP_INC_STATS(sock_net(sk), TCP_MIB_ESTABRESETS);
+
+		sk->sk_prot->unhash(sk);
+		if (inet_csk(sk)->icsk_bind_hash &&
+		    !(sk->sk_userlocks & SOCK_BINDPORT_LOCK))
+			inet_put_port(sk);
+		/* fall through */
+	default:
+		if (oldstate == TCP_ESTABLISHED)
+			TCP_DEC_STATS(sock_net(sk), TCP_MIB_CURRESTAB);
+	}
+
+	/* Change state AFTER socket is unhashed to avoid closed
+	 * socket sitting in hash tables.
+	 */
+	sk->sk_state = state;
+
+	/////////////////////////////////////////////////////////
+	// add patch code.
+	pr_info("TCP %pI4:%d -> %pI4:%d, State %s -> %s\n",
+			&inet->inet_saddr, ntohs(inet->inet_sport),
+			&inet->inet_daddr, ntohs(inet->inet_dport),
+			my_state_name[oldstate], my_state_name[state]);
+	/////////////////////////////////////////////////////////
+
+#ifdef STATE_TRACE
+	SOCK_DEBUG(sk, "TCP sk=%p, State %s -> %s\n", sk, statename[oldstate], statename[state]);
+#endif
 }
 
 
-static int init_find_ksymbol(void)
+static int
+init_find_ksymbol(void)
 {
-	true_tcp_v4_do_rcv = (void *) kallsyms_lookup_name("tcp_v4_do_rcv");
-	if (true_tcp_v4_do_rcv == NULL) {
-		pr_err("not find tcp_v4_do_rcv.\n");
+	tcp_set_state_fn = (void *) kallsyms_lookup_name("tcp_set_state");
+	if (tcp_set_state_fn == NULL) {
+		pr_err("not find tcp_set_state.\n");
 		return -1;
 	}
 
@@ -111,7 +159,7 @@ hello_safe_unhook_all(void *data)
 	} while_each_thread(g, t);
 
 	// hook cleanup.
-	inl_unhook(my_tcp_v4_do_rcv);
+	inl_unhook(my_tcp_set_state);
 
 out:
 	return ret;
@@ -131,9 +179,9 @@ static int __init hello_init(void)
 		goto exit;
 	}
 
-	ret = inl_sethook((void **)&true_tcp_v4_do_rcv, my_tcp_v4_do_rcv);
+	ret = inl_sethook((void **)&tcp_set_state_fn, my_tcp_set_state);
 	if (ret < 0) {
-		pr_err("inl_sethook tcp_v4_do_rcv fail.\n");
+		pr_err("inl_sethook tcp_set_state fail.\n");
 		goto exit;
 	}
 
