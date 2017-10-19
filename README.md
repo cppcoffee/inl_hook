@@ -9,6 +9,13 @@ in the hello_core.c
 ```c
 static void (*tcp_set_state_fn)(struct sock *sk, int state);
 
+static void my_tcp_set_state(struct sock *sk, int state);
+
+static struct hook_ops hello_hooks[] = {
+	DECLARE_HOOK(&tcp_set_state_fn, my_tcp_set_state),
+};
+
+
 static void
 my_tcp_set_state(struct sock *sk, int state)
 {
@@ -17,14 +24,14 @@ my_tcp_set_state(struct sock *sk, int state)
 }
 
 // hooking
-ret = inl_sethook((void **)&tcp_set_state_fn, my_tcp_set_state);
+ret = inl_sethook_ops(hello_hooks, ARRAY_SIZE(hello_hooks));
 if (ret < 0) {
-	pr_err("inl_sethook tcp_set_state fail.\n");
+	pr_err("inl_sethook_ops hello_hooks fail.\n");
 	goto exit;
 }
 
 // unhook
-inl_unhook(my_tcp_set_state);
+inl_unhook_ops(hello_hooks, ARRAY_SIZE(hello_hooks));
 ```
 
 ### thank
