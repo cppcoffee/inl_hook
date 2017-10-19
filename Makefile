@@ -17,7 +17,9 @@ udis86_extra-objs-y := udis86/decode.o \
 	udis86/syn.o \
 	udis86/udis86.o
 
-hello-objs := hello_core.o inl_hook.o $(udis86_extra-objs-y)
+inl_hook-objs-y := util.o inl_hook.o
+
+hello-objs := hello_core.o $(inl_hook-objs-y) $(udis86_extra-objs-y)
 
 modules:
 	make -C $(KDIR) M=$(PWD) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" modules

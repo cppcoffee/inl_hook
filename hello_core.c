@@ -14,25 +14,24 @@
 #include <asm/stacktrace.h>
 #include <net/tcp.h>
 
-#include "inl_hook.h"
-
-
-struct instr_range {
-	unsigned long start;
-	unsigned long end;
-};
-
-
-#define MAX_STACK_TRACE_DEPTH   64
-static unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
-struct stack_trace trace = {
-	.max_entries	= ARRAY_SIZE(stack_entries),
-	.entries	= &stack_entries[0],
-};
+#include "util.h"
 
 
 /* variable */
 static void (*tcp_set_state_fn)(struct sock *sk, int state);
+
+/* hook function */
+static void my_tcp_set_state(struct sock *sk, int state);
+
+
+static struct symbol_ops hello_ops[] = {
+	DECLARE_SYMBOL(&tcp_set_state_fn, "tcp_set_state"),
+};
+
+
+static struct hook_ops hello_hooks[] = {
+	DECLARE_HOOK(&tcp_set_state_fn, my_tcp_set_state),
+};
 
 
 /* hook function */
@@ -90,130 +89,27 @@ my_tcp_set_state(struct sock *sk, int state)
 }
 
 
-static int
-init_find_ksymbol(void)
+static int __init hello_init(void)
 {
-	tcp_set_state_fn = (void *) kallsyms_lookup_name("tcp_set_state");
-	if (tcp_set_state_fn == NULL) {
-		pr_err("not find tcp_set_state.\n");
+	if (!find_ksymbol(hello_ops, ARRAY_SIZE(hello_ops))) {
+		pr_err("hello symbol table not find.\n");
 		return -1;
 	}
 
-	return 0;
-}
-
-
-/* Called from stop_machine */
-static int
-hello_safe_unhook_all(void *data)
-{
-	struct task_struct *g, *t;
-	int i;
-	int ret = 0;
-	unsigned long address;
-	struct instr_range irs[2] = {
-		{
-			.start = ((struct instr_range *)data)->start,
-			.end = ((struct instr_range *)data)->end,
-		},
-		{
-			.start = (unsigned long)hello_safe_unhook_all,
-			.end = (unsigned long)&&lable_unhook_end,
-		}
-	};
-
-	/* Check the stacks of all tasks. */
-	do_each_thread(g, t) {
-		trace.nr_entries = 0;
-		save_stack_trace_tsk(t, &trace);
-
-		if (trace.nr_entries >= trace.max_entries) {
-			ret = -EBUSY;
-			pr_err("more than %u trace entries!\n",
-					trace.max_entries);
-			goto out;
-		}
-
-		for (i = 0; i < trace.nr_entries; i++) {
-			if (trace.entries[i] == ULONG_MAX)
-				break;
-
-			address = trace.entries[i];
-
-			// without cleanup function.
-			if ((address >= irs[0].start && address < irs[0].end)
-				|| (address >= irs[1].start && address < irs[1].end)) {
-				break;
-			}
-
-			ret = inl_within_trampoline(address);
-			if (ret)
-				goto out;
-
-			if (within_module_core(address, THIS_MODULE)) {
-				pr_info("within: %lx\n", trace.entries[i]);
-				ret = -EBUSY;
-				goto out;
-			}
-		}
-	} while_each_thread(g, t);
-
-	// hook cleanup.
-	inl_unhook(my_tcp_set_state);
-
-out:
-	return ret;
-
-lable_unhook_end:
-	;
-}
-
-
-static int __init hello_init(void)
-{
-	int ret;
-
-	ret = init_find_ksymbol();
-	if (ret < 0) {
-		pr_err("find ksymbol fail.\n");
-		goto exit;
-	}
-
-	ret = inl_sethook((void **)&tcp_set_state_fn, my_tcp_set_state);
-	if (ret < 0) {
-		pr_err("inl_sethook tcp_set_state fail.\n");
-		goto exit;
+	if (!inl_sethook_ops(hello_hooks, ARRAY_SIZE(hello_hooks))) {
+		pr_err("hijack hello functions fail.\n");
+		return -1;
 	}
 
 	pr_info("hello loaded.\n");
-
 	return 0;
-
-exit:
-	return ret;
 }
 
 
 static void __exit hello_cleanup(void)
 {
-	int ret;
-	struct instr_range ir;
-
-try_again_unhook:
-	ir.start = (unsigned long)hello_cleanup;
-	ir.end = (unsigned long)&&lable_cleanup_end;
-
-	ret = stop_machine(hello_safe_unhook_all, &ir, NULL);
-	if (ret) {
-		yield();
-		pr_info("module busy, retry again unhook.\n");
-		goto try_again_unhook;
-	}
-
+	inl_unhook_ops(hello_hooks, ARRAY_SIZE(hello_hooks));
 	pr_info("hello unloaded.\n");
-
-lable_cleanup_end:
-	;
 }
 
 
