@@ -23,13 +23,13 @@ modules:
 	make -C $(KDIR) M=$(PWD) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" modules
 
 clean:
-	rm -rf .tmp_versions/
-	rm -f *.swp
-	rm -f *.o
-	rm -f *.ko
-	rm -f modules.order
-	rm -f Module.symvers
-	rm -f modules.order
+	@find $(PWD) \
+		\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
+		-o -name '*.ko.*' \
+		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \
+		-o -name '*.symtypes' -o -name 'modules.order' \
+		-o -name 'Module.markers' -o -name '.tmp_*.o.*' \
+		-o -name '*.gcno' \) -type f -print | xargs rm -f
 
 .PHONY: modules clean
 
